@@ -76,7 +76,7 @@ body { background: var(--studio-paper); }
   .story-heading h2 { margin: 14px 0; }
   .story-heading p { font-size: 16px; }
   .story-layout { display: block; }
-  .story-stage { top: 72px; z-index: 3; padding: 12px; margin: 0; }
+  .story-stage { top: var(--header-height); z-index: 3; padding: 12px; margin: 0; }
   .story-stage img { max-height: 230px; }
   .story-stage > span { padding-top: 6px; font-size: 12px; }
   .story-steps article { min-height: 58svh; justify-content: flex-end; padding: 44px 0; }
