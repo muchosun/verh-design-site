@@ -19,8 +19,10 @@
     const packageSelect = lead.querySelector("select[name='package']");
     if (selectedPackage && packageSelect) packageSelect.value = selectedPackage;
     reachGoal("service_lead_start", { request: requestType, offer: selectedPackage || undefined });
-    lead.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => lead.querySelector("input[type='tel']")?.focus({ preventScroll: true }), 520);
+    const scrollTarget = window.innerWidth <= 760 ? lead.querySelector('[data-service-form]') || lead : lead;
+    scrollTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = lead.querySelector("[name='city']") || lead.querySelector("input[type='tel']");
+    target?.focus({ preventScroll: true });
   };
 
   document.querySelectorAll("[data-scroll-lead]").forEach((button) => {
@@ -50,6 +52,11 @@
       status.textContent = "";
       status.removeAttribute("data-state");
     });
+    form.elements.consent.addEventListener("change", () => {
+      form.elements.consent.removeAttribute("aria-invalid");
+      status.textContent = "";
+      status.removeAttribute("data-state");
+    });
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -64,27 +71,41 @@
       const city = cityInput?.value.trim() || "";
       if (cityInput && (!city || city.length > 80 || !/^[\p{L}\p{M} .()\-]+$/u.test(city))) {
         status.dataset.state = "error";
-        status.textContent = "Укажи город квартиры.";
+        status.textContent = "Укажите город квартиры.";
         cityInput.setAttribute("aria-invalid", "true");
         cityInput.focus();
         return;
       }
       cityInput?.removeAttribute("aria-invalid");
+      const areaInput = form.elements.area;
+      const area = Number(areaInput?.value);
+      const minimumArea = selectedPackage.startsWith("Полный") ? 50 : 30;
+      if (areaInput && (!Number.isFinite(area) || area < minimumArea || area > 10000)) {
+        status.dataset.state = "error";
+        status.textContent = `Укажите площадь от ${minimumArea} до 10 000 м².`;
+        areaInput.setAttribute("aria-invalid", "true");
+        areaInput.focus();
+        return;
+      }
+      areaInput?.removeAttribute("aria-invalid");
 
-      phone.toggleAttribute("aria-invalid", !normalizedPhone);
+      if (normalizedPhone) phone.removeAttribute("aria-invalid");
+      else phone.setAttribute("aria-invalid", "true");
+      if (consent) form.elements.consent.removeAttribute("aria-invalid");
+      else form.elements.consent.setAttribute("aria-invalid", "true");
 
       if (!normalizedPhone || !consent) {
         status.dataset.state = "error";
         status.textContent = !normalizedPhone
-          ? "Проверь номер телефона."
+          ? "Проверьте номер телефона."
           : "Нужно согласие на обработку данных.";
-        form.querySelector("[aria-invalid='true']")?.focus();
+        (!normalizedPhone ? phone : form.elements.consent).focus();
         return;
       }
 
       if (website) return;
       if (submit.disabled) return;
-      const isLocal = location.protocol === "file:" || ["localhost", "127.0.0.1"].includes(location.hostname);
+      const isLocal = Boolean(window.VERH_PREVIEW) || location.protocol === "file:" || ["localhost", "127.0.0.1"].includes(location.hostname);
       reachGoal("service_lead_submit", { request: requestType, offer: selectedPackage || undefined, local_preview: isLocal });
 
       submit.disabled = true;
@@ -100,6 +121,7 @@
           source.searchParams.set("request", requestType);
           if (selectedPackage) source.searchParams.set("package", selectedPackage);
           if (city) source.searchParams.set("city", city);
+          if (areaInput) source.searchParams.set("area", String(area));
 
           const delivery = await window.VerhLead.send(leadEndpoint, {
             kind: "callback",
@@ -118,18 +140,19 @@
         reachGoal("service_lead_success", { request: requestType, offer: selectedPackage || undefined, local_preview: isLocal });
         status.dataset.state = "success";
         status.textContent = isLocal
-          ? "Форма заполнена корректно."
+          ? "Предпросмотр: форма заполнена корректно, заявка не отправлена."
           : "Заявка отправлена. Скоро позвоним и уточним детали.";
-        submit.textContent = "Заявка принята";
+        submit.textContent = isLocal ? "Форма проверена" : "Заявка принята";
         phone.disabled = true;
         if (cityInput) cityInput.disabled = true;
+        if (areaInput) areaInput.disabled = true;
         if (form.elements.package) form.elements.package.disabled = true;
         form.elements.consent.disabled = true;
       } catch (error) {
         console.error("Service lead submission failed", error);
         reachGoal("service_lead_failure", { request: requestType, offer: selectedPackage || undefined });
         status.dataset.state = "error";
-        status.textContent = "Не удалось отправить. Позвони по номеру +7 (918) 238-30-59.";
+        status.textContent = "Не удалось отправить заявку. Позвоните по номеру +7 (918) 238-30-59.";
         submit.disabled = false;
         submit.textContent = "Повторить отправку";
       }
